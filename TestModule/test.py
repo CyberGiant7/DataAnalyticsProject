@@ -86,9 +86,9 @@ def predict(data, clfName, clf):
 
 if __name__ == '__main__':
     name = getName()
-    # models = ["knn", "rf"]  # , "svm", "ff", "tb", "tf"]
-    models = ["rf"]  # , "svm", "ff", "tb", "tf"]
-    data = pd.read_csv("../TrainingModule/dataset/train_test_network.csv", sep=",", low_memory=False)
+    models = ["knn", "rf"]  # , "svm", "ff", "tb", "tf"]
+    # models = ["rf"]  # , "svm", "ff", "tb", "tf"]
+    data = pd.read_csv("../TrainingModule/dataset/test_dataset.csv", sep=",", low_memory=False)
 
     for model in models:
         dfProcessed = preprocess(data, model)

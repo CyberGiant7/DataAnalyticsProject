@@ -1,1 +1,4 @@
 .idea
+*.save
+*.pyc
+/TrainingModule/.ipynb_checkpoints/

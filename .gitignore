@@ -2,3 +2,4 @@
 *.save
 *.pyc
 /TrainingModule/.ipynb_checkpoints/
+/TrainingModule/runs

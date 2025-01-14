@@ -1,6 +1,7 @@
 import pandas as pd
 import pickle
 from sklearn import preprocessing
+from sklearn.feature_selection import SequentialFeatureSelector
 from sklearn.metrics import accuracy_score, balanced_accuracy_score, f1_score, confusion_matrix
 
 MY_UNIQUE_ID = "TestUser"
@@ -34,13 +35,17 @@ def preprocess(data, clfName):
                 target_encoder: preprocessing.LabelEncoder = pickle.load(f)
             with open("transformer/transformer.save", 'rb') as f:
                 transformer = pickle.load(f)
+            with open("transformer/sfs.save", "rb") as f:
+                sfs: SequentialFeatureSelector = pickle.load(f)
             # with open("transformer/pca.save", 'rb') as f:
             #     pca = pickle.load(f)
 
             X = transformer.transform(X)
+            X.columns = [col.replace("remainder__", "scale__") for col in X.columns]
+            X = sfs.transform(X)
             # X = pca.transform(X)
             y = target_encoder.transform(y)
-            return pd.concat([X, pd.DataFrame(y, columns=["type"])], axis=1)
+            return pd.concat([pd.DataFrame(X), pd.DataFrame(y, columns=["type"])], axis=1)
         case "svm" | "ff" | "tb" | "tf":
             pass
 
@@ -86,8 +91,11 @@ def predict(data, clfName, clf):
 
 if __name__ == '__main__':
     name = getName()
-    models = ["knn", "rf"]  # , "svm", "ff", "tb", "tf"]
-    # models = ["rf"]  # , "svm", "ff", "tb", "tf"]
+    # models = ["knn", "rf"]  # , "svm", "ff", "tb", "tf"]
+    models = ["rf"]  # , "svm", "ff", "tb", "tf"]
+    # data = pd.read_csv("../TrainingModule/dataset/test_dataset.csv", sep=",", low_memory=False)
+    import os
+    os.chdir("./TestModule")
     data = pd.read_csv("../TrainingModule/dataset/test_dataset.csv", sep=",", low_memory=False)
 
     for model in models:

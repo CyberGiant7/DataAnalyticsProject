@@ -57,7 +57,7 @@ def load(clfName):
         case "knn":
             import os
             os.environ['OMP_NUM_THREADS'] = '4'
-            return pickle.load(open("models/knn.save", 'rb'))
+            return pickle.load(open("models/knn2.save", 'rb'))
         case "rf":
             return pickle.load(open("models/rf.save", 'rb'))
         case "svm":
@@ -91,7 +91,7 @@ def predict(data, clfName, clf):
 
 if __name__ == '__main__':
     name = getName()
-    models = ["rf", "svm", "knn"]  # , "svm", "ff", "tb", "tf"]
+    models = ["rf", "knn", "svm"]  # , "svm", "ff", "tb", "tf"]
     # models = ["rf"]  # , "svm", "ff", "tb", "tf"]
     # data = pd.read_csv("../TrainingModule/dataset/test_dataset.csv", sep=",", low_memory=False)
     # import os

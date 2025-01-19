@@ -1,12 +1,12 @@
+import pickle
+
 import numpy as np
 import pandas as pd
-import pickle
+import torch
+from pytorch_tabnet.tab_model import TabNetClassifier
 from sklearn import preprocessing
 from sklearn.feature_selection import SequentialFeatureSelector
-from sklearn.metrics import accuracy_score, balanced_accuracy_score, f1_score, confusion_matrix
-from pytorch_tabnet.tab_model import TabNetClassifier
-from pytorch_tabnet.pretraining import TabNetPretrainer
-import torch
+from sklearn.metrics import accuracy_score, balanced_accuracy_score, f1_score
 from sklearn.preprocessing import OrdinalEncoder
 
 
@@ -89,6 +89,7 @@ class TabNet(torch.nn.Module):
     def feature_importances(self):
         return self.network.feature_importances_
 
+
 class CustomOrdinalEncoder(OrdinalEncoder):
     def transform(self, X):
         encoded = super().transform(X)
@@ -100,7 +101,104 @@ class CustomOrdinalEncoder(OrdinalEncoder):
         X = np.where(X == 0, -1, X - 1)
         return super().inverse_transform(X)
 
+
+class TabTransformer(torch.nn.Module):
+    def __init__(self, cat_dims, num_numerical, num_classes, dim_embedding=8, num_heads=2, num_layers=2, dropout=0.1):
+        """
+        Args:
+            cat_dims: List of integers, dove ogni elemento rappresenta i valori unici di una colonna categoriale.
+            num_numerical: Numero di caratteristiche numeriche.
+            num_classes: Numero di classi per output.
+            dim_embedding: Dimensione degli embeddings.
+            num_heads: Numero di "head" nel Multi-Head Attention.
+            num_layers: Numero di livelli Transformer.
+            dropout: Dropout per prevenire overfitting.
+        """
+        super(TabTransformer, self).__init__()
+
+        # Embeddings per features categoriali
+        self.embeddings = torch.nn.ModuleList([
+            torch.nn.Embedding(cat_dim, dim_embedding) for cat_dim in cat_dims
+        ])
+
+        # Layer per le features numeriche
+        self.numerical_norm = torch.nn.LayerNorm(num_numerical) if num_numerical > 0 else None
+
+        # Transformer Encoder
+        encoder_layer = torch.nn.TransformerEncoderLayer(
+            d_model=dim_embedding,
+            nhead=num_heads,
+            dim_feedforward=dim_embedding * 4,
+            dropout=dropout,
+            batch_first=True
+        )
+        self.transformer = torch.nn.TransformerEncoder(encoder_layer, num_layers=num_layers)
+
+        # Classificatore finale
+        self.classifier = torch.nn.Sequential(
+            torch.nn.Linear(len(cat_dims) * dim_embedding + (num_numerical if num_numerical > 0 else 0), 128),
+            torch.nn.ReLU(),
+            torch.nn.Dropout(dropout),
+            torch.nn.Linear(128, num_classes)
+        )
+
+    def forward(self, x_cat, x_num):
+        """
+        Args:
+            x_cat: Tensore (batch_size, num_categorical_features), indici per features categoriali.
+            x_num: Tensore (batch_size, num_numerical_features), valori numerici.
+        Returns:
+            Logits (batch_size, num_classes).
+        """
+        # Embedding per features categoriali
+        x_cat = x_cat.long()
+        cat_embeddings = [emb(x_cat[:, i]) for i, emb in enumerate(self.embeddings)]
+        cat_embeddings = torch.stack(cat_embeddings, dim=1)  # (batch_size, num_categorical_features, dim_embedding)
+
+        # Passa attraverso il Transformer
+        transformed_cat = self.transformer(cat_embeddings)  # (batch_size, num_categorical_features, dim_embedding)
+        transformed_cat = transformed_cat.view(transformed_cat.size(0), -1)  # Flatten per concatenare
+
+        # Normalizzazione delle features numeriche
+        if x_num is not None and self.numerical_norm is not None:
+            x_num = self.numerical_norm(x_num)
+
+        # Concatenazione
+        if x_num is not None:
+            x = torch.cat([transformed_cat, x_num], dim=1)
+        else:
+            x = transformed_cat
+
+        # Classificatore
+        logits = self.classifier(x)
+        return logits
+
+class PyTorchTabTransformer:
+    def __init__(self, model, cat_idx, num_idx, device='cpu'):
+        self.model = model
+        self.device = device
+        self.model.to(self.device)
+        self.cat_idx = cat_idx
+        self.num_idx = num_idx
+
+
+    def predict(self, X):
+        """
+        Esegue le previsioni sul modello PyTorch.
+        """
+        self.model.eval()  # Modalità di valutazione
+        with torch.no_grad():
+            # Controlla se X è un array numpy e convertilo in un tensore PyTorch
+            if isinstance(X, np.ndarray):
+                X = torch.tensor(X, dtype=torch.float32).to(self.device)
+
+            # Supponi che X sia diviso in categoriale e numerico
+            y_pred = self.model(X[:, self.cat_idx].long(),
+                                X[:, self.num_idx])
+            return torch.argmax(y_pred, dim=1).cpu().numpy()
+
 MY_UNIQUE_ID = "TestUser"
+
 
 # Output: unique ID of the team
 def getName():
@@ -150,12 +248,20 @@ def preprocess(data, clfName):
             with open("transformer/transformer_tb.save", 'rb') as f:
                 transformer = pickle.load(f)
 
-
             X = transformer.transform(X)
 
             # cat_idxs = [i for i, f in enumerate(X.columns) if "cat__" in f]
             # cat_dims = [len(X[f].unique()) for i, f in enumerate(X.columns) if "cat__" in f]
             # print( list(enumerate(cat_dims)))
+            y = target_encoder.transform(y)
+            return np.column_stack((X, y))
+        case "tf":
+            with open("transformer/target_encoder.save", 'rb') as f:
+                target_encoder: preprocessing.LabelEncoder = pickle.load(f)
+            with open("transformer/transformer_tf.save", 'rb') as f:
+                transformer = pickle.load(f)
+
+            X = transformer.transform(X)
             y = target_encoder.transform(y)
             return np.column_stack((X, y))
 
@@ -177,7 +283,9 @@ def load(clfName):
         case "tb":
             return pickle.load(open("models/tabnet_model.save", 'rb'))
         case "tf":
-            return pickle.load(open("models/tf.save", 'rb'))
+            # return pickle.load(open("models/model_best_tf.save", 'rb'))
+            # return torch.load(open("models/model_best_tf.save", 'rb'))
+            return pickle.load(open("models/model_best_tf_custom.save", 'rb'))
         case _:
             return None
 
@@ -185,30 +293,32 @@ def load(clfName):
 # Input: PreProcessed dataset, Classifier Name, Classifier Object
 # Output: Performance dictionary
 def predict(data, clfName, clf):
-    if isinstance(data, pd.DataFrame):
-        X = data.iloc[:, :-1]
-        y = data.iloc[:, -1]
-    elif isinstance(data, np.ndarray):
-        X = data[:, :-1]
-        y = data[:, -1]
+    match clfName:
+        case _:
+            if isinstance(data, pd.DataFrame):
+                X = data.iloc[:, :-1]
+                y = data.iloc[:, -1]
+            elif isinstance(data, np.ndarray):
+                X = data[:, :-1]
+                y = data[:, -1]
 
-    print(X.shape, y.shape)
+            print(X.shape, y.shape)
 
-    ypred = clf.predict(X)
-    acc = accuracy_score(y, ypred)
-    bacc = balanced_accuracy_score(y, ypred)
-    f1 = f1_score(y, ypred, average="weighted")
-    # print(confusion_matrix(y, ypred))
+            ypred = clf.predict(X)
+            acc = accuracy_score(y, ypred)
+            bacc = balanced_accuracy_score(y, ypred)
+            f1 = f1_score(y, ypred, average="weighted")
+            # print(confusion_matrix(y, ypred))
 
-    perf = {"acc": acc, "bacc": bacc, "f1": f1}
+            perf = {"acc": acc, "bacc": bacc, "f1": f1}
 
-    return perf
+            return perf
 
 
 if __name__ == '__main__':
     name = getName()
     # models = ["rf", "knn", "svm"]  # , "svm", "ff", "tb", "tf"]
-    models = ["tb"]  # , "svm", "ff", "tb", "tf"]
+    models = ["tf"]  # , "svm", "ff", "tb", "tf"]
     # data = pd.read_csv("../TrainingModule/dataset/test_dataset.csv", sep=",", low_memory=False)
     # import os
     # os.chdir("./TestModule")
@@ -220,7 +330,6 @@ if __name__ == '__main__':
         clf = load(model)
         perf = predict(dfProcessed, model, clf)
         print(f"{model}: {perf}")
-
 
 # knn: {'acc': 0.7951223210435788, 'bacc': 0.7194376510067115, 'f1': 0.7888996709679958} knn con minmax
 # rf: {'acc': 0.9689305023146941, 'bacc': 0.9571513403643335, 'f1': 0.9691014407258134} rf con minmax

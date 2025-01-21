@@ -210,7 +210,7 @@ def getName():
 def preprocess(data, clfName):
     features = list(data.columns)
     # features_to_remove = ["label", "ts", "src_ip", "dst_ip", "dns_query", "ssl_subject", "ssl_issuer", "http_uri", "type", "http_referrer", "http_user_agent"]
-    features_to_remove = ["label", "type"]
+    features_to_remove = ["label", "type", "ts", "http_referrer"]
     features = [feature for feature in features if feature not in features_to_remove]
     data = data[features + ["type"]]
 
@@ -225,23 +225,36 @@ def preprocess(data, clfName):
     y = data["type"]
 
     match clfName:
-        case "knn" | "rf" | "svm":
+        case "knn" | "rf":
             with open("transformer/target_encoder.save", 'rb') as f:
                 target_encoder: preprocessing.LabelEncoder = pickle.load(f)
             with open("transformer/transformer.save", 'rb') as f:
                 transformer = pickle.load(f)
-            with open("transformer/sfs.save", "rb") as f:
-                sfs: SequentialFeatureSelector = pickle.load(f)
-            # with open("transformer/pca.save", 'rb') as f:
-            #     pca = pickle.load(f)
+            # with open("transformer/sfs.save", "rb") as f:
+            #     sfs: SequentialFeatureSelector = pickle.load(f)
+
 
             X = transformer.transform(X)
             X.columns = [col.replace("remainder__", "scale__") for col in X.columns]
-            X = sfs.transform(X)
+            # X = sfs.transform(X)
             # X = pca.transform(X)
             y = target_encoder.transform(y)
             # return pd.concat([pd.DataFrame(X), pd.DataFrame(y, columns=["type"])], axis=1)
             return np.column_stack((X, y))
+
+        case "svm":
+            with open("transformer/target_encoder.save", 'rb') as f:
+                target_encoder: preprocessing.LabelEncoder = pickle.load(f)
+            with open("transformer/transformer.save", 'rb') as f:
+                transformer = pickle.load(f)
+            with open("transformer/nystroem_svm.save", "rb") as f:
+                nystroem_svm = pickle.load(f)
+
+            X = transformer.transform(X)
+            X = nystroem_svm.transform(X)
+            y = target_encoder.transform(y)
+            return np.column_stack((X, y))
+
         case "ff" | "tb" | "tf":
             with open("transformer/target_encoder.save", 'rb') as f:
                 target_encoder: preprocessing.LabelEncoder = pickle.load(f)
@@ -318,7 +331,7 @@ def predict(data, clfName, clf):
 if __name__ == '__main__':
     name = getName()
     # models = ["rf", "knn", "svm"]  # , "svm", "ff", "tb", "tf"]
-    models = ["tf"]  # , "svm", "ff", "tb", "tf"]
+    models = ["svm"]  # , "svm", "ff", "tb", "tf"]
     # data = pd.read_csv("../TrainingModule/dataset/test_dataset.csv", sep=",", low_memory=False)
     # import os
     # os.chdir("./TestModule")

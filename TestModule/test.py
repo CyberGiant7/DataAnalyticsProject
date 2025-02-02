@@ -4,8 +4,12 @@ import numpy as np
 import pandas as pd
 from scipy.sparse import csr_matrix, hstack
 from sklearn import preprocessing
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.linear_model import SGDClassifier
 from sklearn.metrics import accuracy_score, balanced_accuracy_score, f1_score
-from utils import CustomOrdinalEncoder, PyTorchFeedForwardWrapper, FeedForwardPlus, PyTorchTabTransformerWrapper, TabTransformer, TabNet
+from sklearn.neighbors import KNeighborsClassifier
+
+from utils import *
 
 MY_UNIQUE_ID = "SigmoidSquad"
 
@@ -77,21 +81,23 @@ def preprocess(data, clfName):
 
 # Output: Classifier object
 def load(clfName):
+
     match clfName:
         case "knn":
-            return pickle.load(open("models/knn.save", 'rb'))
+            model: KNeighborsClassifier = pickle.load(open("models/knn.save", 'rb'))
         case "rf":
-            return pickle.load(open("models/rf.save", 'rb'))
+            model: RandomForestClassifier = pickle.load(open("models/rf.save", 'rb'))
         case "svm":
-            return pickle.load(open("models/svm.save", 'rb'))
+            model: SGDClassifier = pickle.load(open("models/svm.save", 'rb'))
         case "ff":
-            return pickle.load(open("models/ff.save", 'rb'))
+            model: PyTorchFeedForwardWrapper = pickle.load(open("models/ff.save", 'rb'))
         case "tb":
-            return pickle.load(open("models/tb.save", 'rb'))
+            model: TabNet = pickle.load(open("models/tb.save", 'rb'))
         case "tf":
-            return pickle.load(open("models/tf.save", 'rb'))
+            model: PyTorchTabTransformerWrapper = pickle.load(open("models/tf.save", 'rb'))
         case _:
             return None
+    return model
 
 
 # Input: PreProcessed dataset, Classifier Name, Classifier Object
@@ -123,12 +129,11 @@ def predict(data, clfName, clf):
 
 # if __name__ == '__main__':
 #     name = getName()
-#     models = ["knn", "rf", "svm", "ff", "tb", "tf"]
+#     models = ["knn","rf", "svm", "ff", "tb", "tf"]
 #     data = pd.read_csv("../TrainingModule/dataset/val_dataset.csv", sep=",", low_memory=False)
 #
 #     for model in models:
 #         dfProcessed = preprocess(data, model)
-#         # print(dfProcessed.head(10))
 #         clf = load(model)
 #         perf = predict(dfProcessed, model, clf)
 #         print(f"{model}: {perf}")

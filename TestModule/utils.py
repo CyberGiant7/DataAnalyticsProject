@@ -1,5 +1,6 @@
 import numpy as np
 import torch
+from pytorch_tabnet.tab_model import TabNetClassifier
 from sklearn.preprocessing import OrdinalEncoder
 from torch import nn
 
@@ -18,7 +19,7 @@ class CustomOrdinalEncoder(OrdinalEncoder):
 
 class PyTorchFeedForwardWrapper:
     def __init__(self, model, cat_idx, num_idx, device='cpu'):
-        self.model = model
+        self.model: FeedForwardPlus = model
         self.device = device
         self.model.to(self.device)
         self.cat_idx = cat_idx
@@ -42,7 +43,7 @@ class PyTorchFeedForwardWrapper:
 
 class PyTorchTabTransformerWrapper:
     def __init__(self, model, cat_idx, num_idx, device='cpu'):
-        self.model = model
+        self.model: TabTransformer = model
         self.device = device
         self.model.to(self.device)
         self.cat_idx = cat_idx
@@ -264,7 +265,9 @@ class TabNet(torch.nn.Module):
                                         output_dim=output_dim,
                                         verbose=verbose,
                                         cat_idxs=cat_idxs,
-                                        cat_dims=cat_dims)
+                                        cat_dims=cat_dims,
+                                        cat_emb_dim=8
+                                        )
 
     def fit_model(self, X_train, y_train, X_val, y_val, criterion):
         self.network.fit(X_train=X_train,
@@ -278,8 +281,7 @@ class TabNet(torch.nn.Module):
                          drop_last=True,
                          max_epochs=self.num_epochs,
                          loss_fn=criterion,
-                         from_unsupervised=self.unsupervised_model,
-                         weights=1)
+                         from_unsupervised=self.unsupervised_model)
 
     def predict(self, X):
         return self.network.predict(X)

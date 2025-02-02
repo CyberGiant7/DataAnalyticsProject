@@ -92,7 +92,7 @@ def load(clfName):
         case "ff":
             model: PyTorchFeedForwardWrapper = pickle.load(open("models/ff.save", 'rb'))
         case "tb":
-            model: TabNet = torch.load("models/tb_cpu.save", map_location=torch.device('cpu'))
+            model: TabNet = torch.load("models/tb.save", map_location=torch.device('cpu'))
             model.to(torch.device('cpu'))
             model.network.device = torch.device('cpu')
         case "tf":

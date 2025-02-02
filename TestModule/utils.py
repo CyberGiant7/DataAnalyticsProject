@@ -209,3 +209,83 @@ class TabTransformer(nn.Module):
         # Classificatore
         logits = self.classifier(x)
         return logits
+
+class TabNet(torch.nn.Module):
+    '''
+    Wrapper class for TabNetClassifier
+    '''
+
+    def __init__(self, n_d,
+                 n_a,
+                 n_steps,
+                 gamma,
+                 optimizer_fn,
+                 n_independent,
+                 n_shared,
+                 epsilon,
+                 seed,
+                 lambda_sparse,
+                 clip_value,
+                 momentum,
+                 optimizer_params,
+                 scheduler_params,
+                 mask_type,
+                 scheduler_fn,
+                 device_name,
+                 output_dim,
+                 batch_size,
+                 num_epochs,
+                 unsupervised_model,
+                 cat_idxs=None,
+                 cat_dims=None,
+                 verbose=0):
+        super(TabNet, self).__init__()
+
+        self.batch_size = batch_size
+        self.num_epochs = num_epochs
+        self.unsupervised_model = unsupervised_model
+        self.network = TabNetClassifier(n_d=n_d,
+                                        n_a=n_a,
+                                        n_steps=n_steps,
+                                        gamma=gamma,
+                                        optimizer_fn=optimizer_fn,
+                                        n_independent=n_independent,
+                                        n_shared=n_shared,
+                                        epsilon=epsilon,
+                                        seed=seed,
+                                        lambda_sparse=lambda_sparse,
+                                        clip_value=clip_value,
+                                        momentum=momentum,
+                                        optimizer_params=optimizer_params,
+                                        scheduler_params=scheduler_params,
+                                        mask_type=mask_type,
+                                        scheduler_fn=scheduler_fn,
+                                        device_name=device_name,
+                                        output_dim=output_dim,
+                                        verbose=verbose,
+                                        cat_idxs=cat_idxs,
+                                        cat_dims=cat_dims)
+
+    def fit_model(self, X_train, y_train, X_val, y_val, criterion):
+        self.network.fit(X_train=X_train,
+                         y_train=y_train,
+                         eval_set=[(X_train, y_train), (X_val, y_val)],
+                         eval_metric=['balanced_accuracy'],
+                         patience=10,
+                         batch_size=self.batch_size,
+                         virtual_batch_size=128,
+                         num_workers=0,
+                         drop_last=True,
+                         max_epochs=self.num_epochs,
+                         loss_fn=criterion,
+                         from_unsupervised=self.unsupervised_model,
+                         weights=1)
+
+    def predict(self, X):
+        return self.network.predict(X)
+
+    def explain(self, X):
+        return self.network.explain(X)
+
+    def feature_importances(self):
+        return self.network.feature_importances_

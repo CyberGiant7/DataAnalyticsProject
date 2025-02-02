@@ -1,5 +1,5 @@
 .idea
-*.save
+TrainingModule/models/*.save
+TestModule/models/*.save
 *.pyc
 /TrainingModule/.ipynb_checkpoints/
-/TrainingModule/runs
